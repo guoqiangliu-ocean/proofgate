@@ -4,8 +4,9 @@ ProofGate turns messy job, grant, hackathon, and bounty listings into an
 evidence-led decision memo. A deterministic safety engine first separates
 individual payouts from headline pools, checks deadlines, identifies normal
 human gates, and rejects capital or credential risks. GPT-5.6 then turns that
-locked analysis into a concise memo with evidence gaps, safe next actions, and
-stop conditions. The model can explain the decision; it cannot override it.
+locked analysis into a concise memo. Evidence gaps, safe next actions, and stop
+conditions remain deterministic. The model can explain the decision; it cannot
+override it.
 
 ProofGate is a Work & Productivity project for OpenAI Build Week. It extends
 the original deterministic BountyGuard engine with a new single-workflow UI,
@@ -74,8 +75,9 @@ The server runs deterministic analysis first, sends only the normalized
 opportunity plus that analysis to `gpt-5.6`, and requires strict JSON output.
 The returned `decision` always comes from the deterministic engine.
 Model-supplied evidence pointers must resolve to submitted or deterministic
-data. Missing server configuration returns 503; upstream or invalid model
-output returns 502.
+data, and the server—not the model—renders each reference claim. Missing server
+configuration returns 503; upstream or invalid model output returns 502; a
+model timeout returns 504.
 
 The original deterministic API remains available:
 
@@ -185,6 +187,11 @@ npx wrangler deploy
 Never place the key in `wrangler.toml`, browser code, request JSON, screenshots,
 or version control.
 
+The Worker includes a best-effort eight-requests-per-minute, per-IP limiter.
+Because isolate-local memory is not a complete abuse-control boundary, a public
+deployment must also use a Cloudflare Rate Limiting/WAF rule (or equivalent)
+and a hard OpenAI project budget. Do not rely on the in-code limiter alone.
+
 ## Structure
 
 - `lib/analyze.mjs` — deterministic opportunity analysis.
@@ -192,6 +199,7 @@ or version control.
 - `lib/checklist.mjs` — strict input validation and deterministic next-step checklist.
 - `lib/payout-audit.mjs` — deterministic payout, timing, condition, and settlement audit.
 - `lib/decision-memo.mjs` — GPT-5.6 request, structured-output validation, and evidence locking.
+- `lib/rate-limit.mjs` — best-effort per-isolate request limiter.
 - `lib/http-handler.mjs` — shared Fetch API request handler.
 - `public/index.html` — single-file demo UI.
 - `server.mjs` — local Node adapter.
@@ -228,15 +236,18 @@ product decisions were to:
   invalid.
 
 GPT-5.6 is used at runtime for the part that benefits from language reasoning:
-turning the locked analysis and submitted evidence into a concise decision memo.
-It is not used as an unreviewable classifier and cannot override a rejection.
+turning the locked analysis and submitted evidence into a concise decision memo
+with evidence pointers. The server renders those references, and the local
+checklist owns all gaps, actions, and stop conditions. GPT-5.6 is not used as an
+unreviewable classifier and cannot override a rejection.
 
-The automated suite currently contains 67 tests. It covers deterministic
+The automated suite currently contains 73 tests. It covers deterministic
 analysis, comparison, checklists, payout audits, server behavior, request-size
 limits, missing-key handling, upstream errors, malicious or invalid structured
-output, decision consistency, and API-key non-disclosure. All model tests use
-mocked fetch responses; a separate live smoke test requires a real server-side
-API key.
+output, unsafe model instructions, evidence-claim rendering, decision
+consistency, timeouts, rate limiting, and API-key non-disclosure. All model
+tests use mocked fetch responses; a separate live smoke test requires a real
+server-side API key.
 
 ## Safety boundary
 
@@ -249,6 +260,8 @@ API key.
   the request body or returned to the client.
 - GPT-5.6 cannot change the deterministic decision; invalid, inconsistent, or
   secret-bearing model output fails closed.
+- GPT-5.6 cannot supply the final actions or stop conditions; those are
+  overwritten with deterministic checklist output.
 - No guarantee that a listing is genuine or that a user will be selected.
 - Official source, sponsor identity, payout, deadline, jurisdiction, and tax
   treatment still require human verification.

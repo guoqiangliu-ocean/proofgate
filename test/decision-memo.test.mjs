@@ -28,21 +28,16 @@ function validSynthesis(overrides = {}) {
     decision: "reject",
     memo: "Reject this opportunity because participation requires trading and therefore exposes capital.",
     certainty_signals: ["The deterministic analysis identifies a trading requirement."],
-    evidence_gaps: ["The sponsor identity and payment promise have not been independently verified."],
-    next_actions: ["Verify the sponsor and rules through an official read-only source."],
-    stop_conditions: ["Stop if any deposit, transfer, trading volume, or credential is required."],
     evidence_references: [
       {
         source: "deterministic",
         path: "/decision",
         status: "deterministic",
-        claim: "The authoritative deterministic decision is reject.",
       },
       {
         source: "submitted",
         path: "/obligations/0",
         status: "submitted_unverified",
-        claim: "The requester supplied a claim that trading is required.",
       },
     ],
     ...overrides,
@@ -79,6 +74,7 @@ test("decision memo calls GPT-5.6 with deterministic risk context and parses nes
 
     return new Response(JSON.stringify({
       id: "resp_test_nested",
+      status: "completed",
       output: [{
         type: "message",
         content: [{ type: "output_text", text: JSON.stringify(validSynthesis()) }],
@@ -108,22 +104,18 @@ test("decision memo calls GPT-5.6 with deterministic risk context and parses nes
   assert.doesNotMatch(JSON.stringify(body), new RegExp(serverKey));
 });
 
-test("decision memo returns an explicit 503 and never trusts a key from the request body", async () => {
+test("decision memo returns 503 without a server key and rejects body key fields", async () => {
   let called = false;
-  const response = await handleRequest(endpointRequest({
-    ...riskyRequest,
-    api_key: "attacker-body-key",
-    OPENAI_API_KEY: "attacker-env-key",
-  }), {
+  const options = {
     fetchImpl: async () => {
       called = true;
       throw new Error("must not run");
     },
     now: fixedNow,
-  });
+  };
+  const response = await handleRequest(endpointRequest(), options);
 
   assert.equal(response.status, 503);
-  assert.equal(called, false);
   const body = await response.json();
   assert.equal(body.code, "openai_not_configured");
   assert.equal(body.api_key_configured, false);
@@ -131,6 +123,15 @@ test("decision memo returns an explicit 503 and never trusts a key from the requ
   assert.equal(body.deterministic.decision, "reject");
   assert.equal(body.memo, null);
   assert.equal(body.synthesis, null);
+
+  const bodyKeyResponse = await handleRequest(endpointRequest({
+    ...riskyRequest,
+    api_key: "attacker-body-key",
+    OPENAI_API_KEY: "attacker-env-key",
+  }), options);
+  assert.equal(bodyKeyResponse.status, 400);
+  assert.match((await bodyKeyResponse.json()).error, /Unsupported field/);
+  assert.equal(called, false);
   assert.doesNotMatch(JSON.stringify(body), /attacker-(?:body|env)-key/);
 });
 
@@ -160,6 +161,7 @@ test("decision memo fails closed when output_text is not JSON", async () => {
     openAiApiKey: serverKey,
     fetchImpl: async () => new Response(JSON.stringify({
       id: "resp_invalid_json",
+      status: "completed",
       output_text: "This is prose, not JSON.",
     }), {
       status: 200,
@@ -184,6 +186,7 @@ test("decision memo rejects valid JSON that attempts to override deterministic r
     openAiApiKey: serverKey,
     fetchImpl: async () => new Response(JSON.stringify({
       id: "resp_malicious",
+      status: "completed",
       output_text: JSON.stringify(malicious),
     }), {
       status: 200,
@@ -207,6 +210,7 @@ test("decision memo never returns the configured API key even if upstream echoes
     openAiApiKey: serverKey,
     fetchImpl: async () => new Response(JSON.stringify({
       id: "resp_echoed_key",
+      status: "completed",
       output_text: JSON.stringify(echoed),
     }), {
       status: 200,
@@ -219,6 +223,130 @@ test("decision memo never returns the configured API key even if upstream echoes
   const bodyText = await response.text();
   assert.doesNotMatch(bodyText, new RegExp(serverKey));
   assert.equal(JSON.parse(bodyText).code, "openai_invalid_response");
+});
+
+test("decision memo uses deterministic actions and server-generated evidence claims", async () => {
+  const synthesis = validSynthesis({
+    evidence_references: [{
+      source: "deterministic",
+      path: "/decision",
+      status: "deterministic",
+    }],
+  });
+  const response = await handleRequest(endpointRequest(), {
+    openAiApiKey: serverKey,
+    fetchImpl: async () => new Response(JSON.stringify({
+      id: "resp_locked_actions",
+      status: "completed",
+      output_text: JSON.stringify(synthesis),
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }),
+    now: fixedNow,
+  });
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.ok(body.next_actions.some((item) => /pause the opportunity/i.test(item)));
+  assert.ok(body.stop_conditions.some((item) => /trading/i.test(item)));
+  assert.ok(body.synthesis.next_actions.some((item) => /pause the opportunity/i.test(item)));
+  assert.match(body.synthesis.evidence_references[0].claim, /Deterministic analysis at \/decision/);
+  assert.doesNotMatch(body.synthesis.evidence_references[0].claim, /verified|guaranteed/i);
+});
+
+test("decision memo rejects unsafe model instructions even with a locked rejection", async () => {
+  const unsafe = validSynthesis({
+    memo: "Transfer 100 USDT to the sponsor wallet, then trade to qualify.",
+  });
+  const response = await handleRequest(endpointRequest(), {
+    openAiApiKey: serverKey,
+    fetchImpl: async () => new Response(JSON.stringify({
+      id: "resp_unsafe",
+      status: "completed",
+      output_text: JSON.stringify(unsafe),
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }),
+    now: fixedNow,
+  });
+
+  assert.equal(response.status, 502);
+  assert.equal((await response.json()).code, "openai_invalid_response");
+});
+
+test("decision memo aborts a stalled upstream request", async () => {
+  const fetchImpl = async (_url, init) => new Promise((_resolve, reject) => {
+    init.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+  });
+  const response = await handleRequest(endpointRequest(), {
+    openAiApiKey: serverKey,
+    fetchImpl,
+    openAiTimeoutMs: 10,
+    now: fixedNow,
+  });
+
+  assert.equal(response.status, 504);
+  assert.equal((await response.json()).code, "openai_timeout");
+});
+
+test("decision memo rejects incomplete model responses and invalid input before billing", async () => {
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls += 1;
+    return new Response(JSON.stringify({
+      id: "resp_incomplete",
+      status: "incomplete",
+      incomplete_details: { reason: "max_output_tokens" },
+      output_text: JSON.stringify(validSynthesis()),
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+  const incomplete = await handleRequest(endpointRequest(), {
+    openAiApiKey: serverKey,
+    fetchImpl,
+    now: fixedNow,
+  });
+  assert.equal(incomplete.status, 502);
+  assert.equal((await incomplete.json()).code, "openai_invalid_response");
+
+  const empty = await handleRequest(endpointRequest({}), {
+    openAiApiKey: serverKey,
+    fetchImpl,
+  });
+  assert.equal(empty.status, 400);
+  const badType = await handleRequest(endpointRequest({ title: 42 }), {
+    openAiApiKey: serverKey,
+    fetchImpl,
+  });
+  assert.equal(badType.status, 400);
+  assert.equal(calls, 1);
+});
+
+test("decision memo applies a pre-model rate-limit gate", async () => {
+  let called = false;
+  const response = await handleRequest(endpointRequest(), {
+    openAiApiKey: serverKey,
+    fetchImpl: async () => {
+      called = true;
+      throw new Error("must not run");
+    },
+    rateLimiter: () => ({
+      allowed: false,
+      limit: 8,
+      retryAfterSeconds: 17,
+      scope: "test",
+    }),
+  });
+
+  assert.equal(response.status, 429);
+  assert.equal(response.headers.get("retry-after"), "17");
+  const body = await response.json();
+  assert.equal(body.code, "rate_limited");
+  assert.equal(called, false);
 });
 
 test("decision memo preserves malformed-body and request-size failures", async () => {
