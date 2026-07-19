@@ -1,0 +1,15 @@
+{
+  "name": "bountyguard-asp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic opportunity screening API for agents",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}

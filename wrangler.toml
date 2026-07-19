@@ -1,0 +1,8 @@
+name = "bountyguard-asp"
+main = "worker.mjs"
+compatibility_date = "2026-07-17"
+
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true

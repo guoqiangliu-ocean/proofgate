@@ -1,0 +1,938 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080a0f">
+  <meta name="description" content="BountyGuard is a deterministic, read-only opportunity risk screener for agents and humans.">
+  <title>BountyGuard — Opportunity Risk Screening</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #080a0f;
+      --surface: rgba(18, 22, 31, .84);
+      --surface-solid: #12161f;
+      --surface-raised: #181d28;
+      --line: rgba(255, 255, 255, .095);
+      --line-strong: rgba(255, 255, 255, .17);
+      --text: #f4f6fa;
+      --muted: #929cab;
+      --accent: #b8ff5c;
+      --accent-ink: #101508;
+      --good: #63e6a6;
+      --warn: #ffcf6e;
+      --bad: #ff7c86;
+      --radius-lg: 24px;
+      --radius-md: 15px;
+      --shadow: 0 24px 80px rgba(0, 0, 0, .32);
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 15% -10%, rgba(184, 255, 92, .12), transparent 30rem),
+        radial-gradient(circle at 96% 12%, rgba(86, 126, 255, .12), transparent 34rem),
+        var(--bg);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+
+    button, input, textarea, select { font: inherit; }
+
+    button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+      outline: 3px solid rgba(184, 255, 92, .28);
+      outline-offset: 2px;
+    }
+
+    .shell { width: min(1180px, calc(100% - 36px)); margin: 0 auto; }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 76px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 780; letter-spacing: -.02em; }
+
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      color: var(--accent-ink);
+      background: var(--accent);
+      font-size: 13px;
+      letter-spacing: -.04em;
+      box-shadow: 0 0 32px rgba(184, 255, 92, .18);
+    }
+
+    .brand small {
+      margin-left: 4px;
+      padding: 3px 7px;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 650;
+      letter-spacing: .09em;
+      text-transform: uppercase;
+    }
+
+    .endpoint {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--good); box-shadow: 0 0 14px var(--good); }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr);
+      align-items: end;
+      gap: 48px;
+      padding: 76px 0 52px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 18px;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 760;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before { content: ""; width: 24px; height: 1px; background: var(--accent); }
+
+    h1 {
+      max-width: 780px;
+      margin: 0;
+      font-size: clamp(42px, 7vw, 78px);
+      line-height: .98;
+      letter-spacing: -.065em;
+    }
+
+    h1 span { color: var(--muted); }
+
+    .lede { max-width: 660px; margin: 24px 0 0; color: #b8c0cc; font-size: clamp(16px, 2vw, 19px); }
+
+    .guardrails { display: grid; gap: 11px; margin: 0; padding: 0; list-style: none; }
+
+    .guardrails li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #c9cfda;
+      font-size: 13px;
+    }
+
+    .guardrails li::before {
+      content: "✓";
+      display: grid;
+      place-items: center;
+      width: 21px;
+      height: 21px;
+      border: 1px solid rgba(99, 230, 166, .36);
+      border-radius: 50%;
+      color: var(--good);
+      font-size: 11px;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+      gap: 18px;
+      padding-bottom: 46px;
+    }
+
+    .panel {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 25px 26px 20px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .panel-head h2 { margin: 0 0 4px; font-size: 18px; letter-spacing: -.02em; }
+    .panel-head p { margin: 0; color: var(--muted); font-size: 12px; }
+
+    .api-tag {
+      flex: 0 0 auto;
+      padding: 6px 9px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, .025);
+      font: 10px ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    form { padding: 24px 26px 27px; }
+    .mode-switch {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      margin-bottom: 20px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(0, 0, 0, .18);
+    }
+    .mode-button {
+      min-height: 38px;
+      border: 0;
+      border-radius: 8px;
+      color: var(--muted);
+      background: transparent;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 720;
+    }
+    .mode-button[aria-selected="true"] { color: var(--text); background: var(--surface-raised); box-shadow: 0 4px 18px rgba(0, 0, 0, .18); }
+    .form-view[hidden], .ranking-section[hidden], .checklist-section[hidden], .audit-section[hidden] { display: none; }
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .field { display: grid; gap: 7px; }
+    .field.full { grid-column: 1 / -1; }
+
+    label { color: #cdd3dd; font-size: 12px; font-weight: 670; }
+    label span { color: var(--muted); font-weight: 450; }
+
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      color: var(--text);
+      background: #0c1017;
+      transition: border-color .18s ease, background .18s ease;
+    }
+
+    input, select { height: 43px; padding: 0 12px; }
+    textarea { min-height: 168px; padding: 12px; resize: vertical; line-height: 1.55; }
+    #compare-json, #checklist-json, #audit-json { min-height: 252px; font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    input:hover, textarea:hover, select:hover { border-color: var(--line-strong); }
+    input::placeholder, textarea::placeholder { color: #59616f; }
+
+    .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 20px; }
+
+    .button {
+      min-height: 42px;
+      padding: 0 17px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      color: #d8dde6;
+      background: transparent;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 720;
+      transition: transform .15s ease, border-color .15s ease, background .15s ease;
+    }
+
+    .button:hover { transform: translateY(-1px); border-color: var(--line-strong); background: rgba(255, 255, 255, .035); }
+    .button.primary { border-color: var(--accent); color: var(--accent-ink); background: var(--accent); }
+    .button.primary:hover { background: #c7ff7d; }
+    .button:disabled { opacity: .62; cursor: wait; transform: none; }
+
+    .privacy-note { margin-left: auto; color: #737d8c; font-size: 10px; }
+
+    .result-body { min-height: 628px; padding: 24px 26px 27px; }
+    .result-empty { display: grid; place-items: center; min-height: 530px; text-align: center; }
+
+    .empty-inner { max-width: 330px; }
+    .empty-orbit { position: relative; width: 88px; height: 88px; margin: 0 auto 24px; border: 1px solid var(--line-strong); border-radius: 50%; }
+    .empty-orbit::before, .empty-orbit::after { content: ""; position: absolute; border-radius: 50%; }
+    .empty-orbit::before { inset: 17px; border: 1px dashed rgba(184, 255, 92, .5); }
+    .empty-orbit::after { width: 10px; height: 10px; top: 9px; left: 50%; background: var(--accent); box-shadow: 0 0 18px rgba(184, 255, 92, .45); }
+    .result-empty h3 { margin: 0 0 8px; font-size: 16px; }
+    .result-empty p { margin: 0; color: var(--muted); font-size: 12px; }
+
+    .result-content[hidden], .result-empty[hidden] { display: none; }
+
+    .verdict {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 18px;
+      align-items: center;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: linear-gradient(135deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .01));
+    }
+
+    .verdict-kicker { color: var(--muted); font-size: 10px; font-weight: 760; letter-spacing: .13em; text-transform: uppercase; }
+    .verdict h3 { margin: 4px 0 0; font-size: 28px; letter-spacing: -.04em; text-transform: capitalize; }
+    .verdict-badge { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 17px; font-size: 22px; font-weight: 800; }
+    .is-eligible .verdict-badge { color: var(--good); background: rgba(99, 230, 166, .10); border: 1px solid rgba(99, 230, 166, .26); }
+    .is-review .verdict-badge { color: var(--warn); background: rgba(255, 207, 110, .10); border: 1px solid rgba(255, 207, 110, .26); }
+    .is-reject .verdict-badge { color: var(--bad); background: rgba(255, 124, 134, .10); border: 1px solid rgba(255, 124, 134, .26); }
+
+    .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+    .metric { min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: rgba(0, 0, 0, .12); }
+    .metric-label { display: block; margin-bottom: 5px; color: var(--muted); font-size: 9px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+    .metric-value { display: block; overflow: hidden; color: #e7eaf0; font-size: 13px; font-weight: 680; text-overflow: ellipsis; white-space: nowrap; }
+
+    .section { margin-top: 21px; }
+    .section-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; color: #d8dde6; font-size: 11px; font-weight: 760; letter-spacing: .08em; text-transform: uppercase; }
+    .section-title span { color: var(--muted); font-size: 9px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+    .chips { display: flex; flex-wrap: wrap; gap: 7px; min-height: 30px; }
+    .chip { padding: 6px 9px; border: 1px solid var(--line); border-radius: 999px; color: #bfc6d1; background: rgba(255, 255, 255, .025); font-size: 10px; }
+    .chip.good { border-color: rgba(99, 230, 166, .23); color: var(--good); background: rgba(99, 230, 166, .055); }
+    .chip.bad { border-color: rgba(255, 124, 134, .23); color: var(--bad); background: rgba(255, 124, 134, .055); }
+
+    .risk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .risk-card { padding: 13px; border: 1px solid var(--line); border-radius: 12px; background: rgba(0, 0, 0, .1); }
+    .risk-card strong { display: block; margin-bottom: 5px; font-size: 11px; }
+    .risk-card p { margin: 0; color: var(--muted); font-size: 10px; }
+
+    .ranking-list { display: grid; gap: 8px; }
+    .ranking-row {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 11px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: rgba(0, 0, 0, .1);
+    }
+    .rank-number { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; color: var(--accent); background: rgba(184, 255, 92, .08); font-size: 10px; font-weight: 800; }
+    .rank-copy { min-width: 0; }
+    .rank-copy strong { display: block; overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+    .rank-copy span { color: var(--muted); font-size: 9px; text-transform: capitalize; }
+    .rank-payout { color: #dce1e9; font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+    .checklist-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+    .checklist-card { padding: 13px; border: 1px solid var(--line); border-radius: 12px; background: rgba(0, 0, 0, .1); }
+    .checklist-card strong { display: block; margin-bottom: 7px; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; }
+    .checklist-card ul { display: grid; gap: 6px; margin: 0; padding-left: 16px; color: var(--muted); font-size: 10px; }
+    .checklist-card.stop { border-color: rgba(255, 124, 134, .2); }
+    .checklist-card.stop strong { color: var(--bad); }
+    .audit-value { margin: 0; color: #dce1e9; font-size: 11px; }
+
+    details { margin-top: 20px; border-top: 1px solid var(--line); }
+    summary { padding: 16px 0 4px; color: var(--muted); cursor: pointer; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    pre { overflow: auto; max-height: 280px; margin: 10px 0 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; color: #bac3d0; background: #090c12; font: 10px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; word-break: break-word; }
+
+    .error-box { padding: 16px; border: 1px solid rgba(255, 124, 134, .25); border-radius: 12px; color: var(--bad); background: rgba(255, 124, 134, .06); font-size: 12px; }
+
+    footer { display: flex; justify-content: space-between; gap: 24px; padding: 0 0 34px; color: #66707e; font-size: 10px; }
+    footer strong { color: #959eaa; }
+
+    @media (max-width: 900px) {
+      .hero { grid-template-columns: 1fr; gap: 30px; padding-top: 56px; }
+      .guardrails { grid-template-columns: repeat(3, 1fr); }
+      .workspace { grid-template-columns: 1fr; }
+      .result-body { min-height: auto; }
+      .result-empty { min-height: 340px; }
+    }
+
+    @media (max-width: 640px) {
+      .shell { width: min(100% - 22px, 1180px); }
+      .topbar { min-height: 66px; }
+      .mode-switch { grid-template-columns: 1fr 1fr; }
+      .endpoint { display: none; }
+      .hero { padding: 42px 3px 36px; }
+      h1 { font-size: clamp(42px, 15vw, 62px); }
+      .guardrails { grid-template-columns: 1fr; }
+      .panel { border-radius: 18px; }
+      .panel-head, form, .result-body { padding-left: 18px; padding-right: 18px; }
+      .field-grid, .risk-grid, .checklist-grid { grid-template-columns: 1fr; }
+      .field.full { grid-column: auto; }
+      .metrics { grid-template-columns: 1fr; }
+      .privacy-note { width: 100%; margin-left: 0; }
+      footer { flex-direction: column; gap: 8px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">BG</span> BountyGuard <small>Read only</small></div>
+      <div class="endpoint"><span class="pulse" aria-hidden="true"></span> /v1/analyze · compare · checklist · payout-audit</div>
+    </header>
+
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Deterministic opportunity screening</div>
+        <h1>Know the payout.<br><span>See the risk.</span></h1>
+        <p class="lede">Screen jobs, grants, hackathons, and bounties for individual payout clarity, deadline status, human gates, and avoidable capital risk.</p>
+      </div>
+      <ul class="guardrails" aria-label="Safety boundaries">
+        <li>No wallet access</li>
+        <li>No deposits or trading</li>
+        <li>No external URL fetching</li>
+      </ul>
+    </section>
+
+    <main class="workspace">
+      <section class="panel" aria-labelledby="input-title">
+        <div class="panel-head">
+          <div><h2 id="input-title">Opportunity input</h2><p>Paste the listing text or supply structured details.</p></div>
+          <span class="api-tag">64 KiB max</span>
+        </div>
+        <form id="screen-form">
+          <div class="mode-switch" role="tablist" aria-label="Service mode">
+            <button class="mode-button" id="single-mode" type="button" role="tab" aria-selected="true" aria-controls="single-view">Analyze one</button>
+            <button class="mode-button" id="compare-mode" type="button" role="tab" aria-selected="false" aria-controls="compare-view">Compare 2–10</button>
+            <button class="mode-button" id="checklist-mode" type="button" role="tab" aria-selected="false" aria-controls="checklist-view">Build checklist</button>
+            <button class="mode-button" id="audit-mode" type="button" role="tab" aria-selected="false" aria-controls="audit-view">Audit payout</button>
+          </div>
+          <div class="form-view" id="single-view" role="tabpanel" aria-labelledby="single-mode">
+            <div class="field-grid">
+            <div class="field full">
+              <label for="title">Title <span>optional</span></label>
+              <input id="title" name="title" autocomplete="off" placeholder="Example: Agent infrastructure bounty">
+            </div>
+            <div class="field full">
+              <label for="listing-text">Listing or terms</label>
+              <textarea id="listing-text" name="text" placeholder="Paste the relevant payout, deadline, requirements, and terms. BountyGuard will not open links."></textarea>
+            </div>
+            <div class="field">
+              <label for="deadline">Deadline <span>optional</span></label>
+              <input id="deadline" name="deadline" type="datetime-local">
+            </div>
+            <div class="field">
+              <label for="currency">Structured currency</label>
+              <select id="currency" name="currency">
+                <option value="">Detect from text</option>
+                <option>USDT</option><option>USDC</option><option>USDG</option><option>DAI</option><option>USD</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="single-payout">Individual payout <span>optional</span></label>
+              <input id="single-payout" name="single_payout" type="number" min="0" step="0.01" inputmode="decimal" placeholder="10000">
+            </div>
+            <div class="field">
+              <label for="target">Minimum target (USD)</label>
+              <input id="target" name="target_min_usd" type="number" min="1" step="1" inputmode="numeric" value="5000">
+            </div>
+            </div>
+          </div>
+          <div class="form-view" id="compare-view" role="tabpanel" aria-labelledby="compare-mode" hidden>
+            <div class="field-grid">
+              <div class="field full">
+                <label for="compare-json">Opportunities <span>JSON array · 2–10 objects</span></label>
+                <textarea id="compare-json" name="compare_json" spellcheck="false" placeholder='[{"title":"Option A","text":"First prize 10,000 USDT."},{"title":"Option B","single_payout":6000,"currency":"USDC"}]'></textarea>
+              </div>
+              <div class="field">
+                <label for="compare-target">Shared minimum target (USD)</label>
+                <input id="compare-target" name="compare_target" type="number" min="1" step="1" inputmode="numeric" value="5000">
+              </div>
+              <div class="field">
+                <label for="compare-currencies">Preferred currencies <span>ordered</span></label>
+                <input id="compare-currencies" name="compare_currencies" autocomplete="off" value="USDT, USDC" placeholder="USDT, USDC">
+              </div>
+            </div>
+          </div>
+          <div class="form-view" id="checklist-view" role="tabpanel" aria-labelledby="checklist-mode" hidden>
+            <div class="field-grid">
+              <div class="field full">
+                <label for="checklist-json">Opportunity <span>single JSON object</span></label>
+                <textarea id="checklist-json" name="checklist_json" spellcheck="false" placeholder='{"title":"Opportunity","text":"First prize 10,000 USDT. Registration and KYC required.","deadline":"2026-07-27T23:59:59Z"}'></textarea>
+              </div>
+              <div class="field">
+                <label for="checklist-target">Minimum target (USD)</label>
+                <input id="checklist-target" name="checklist_target" type="number" min="1" step="1" inputmode="numeric" value="5000">
+              </div>
+              <div class="field">
+                <label for="checklist-currencies">Preferred currencies <span>ordered</span></label>
+                <input id="checklist-currencies" name="checklist_currencies" autocomplete="off" value="USDT, USDC" placeholder="USDT, USDC">
+              </div>
+            </div>
+          </div>
+          <div class="form-view" id="audit-view" role="tabpanel" aria-labelledby="audit-mode" hidden>
+            <div class="field-grid">
+              <div class="field full">
+                <label for="audit-json">Opportunity <span>single JSON object</span></label>
+                <textarea id="audit-json" name="audit_json" spellcheck="false" placeholder='{"title":"Award","text":"First prize 10,000 USDT. Payment within 30 days after winner announcement. KYC required."}'></textarea>
+              </div>
+              <div class="field">
+                <label for="audit-target">Minimum target (USD)</label>
+                <input id="audit-target" name="audit_target" type="number" min="1" step="1" inputmode="numeric" value="5000">
+              </div>
+              <div class="field">
+                <label for="audit-currencies">Preferred currencies <span>ordered</span></label>
+                <input id="audit-currencies" name="audit_currencies" autocomplete="off" value="USDT, USDC" placeholder="USDT, USDC">
+              </div>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="button primary" id="analyze-button" type="submit">Analyze opportunity</button>
+            <button class="button" id="sample-button" type="button">Load sample</button>
+            <button class="button" type="reset">Clear</button>
+            <span class="privacy-note">Processed in memory · not stored</span>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel" aria-labelledby="result-title">
+        <div class="panel-head">
+          <div><h2 id="result-title">Screening result</h2><p>Evidence-led output, not a guarantee of legitimacy or payment.</p></div>
+          <button class="button" id="copy-button" type="button" hidden>Copy JSON</button>
+        </div>
+        <div class="result-body" aria-live="polite">
+          <div class="result-empty" id="result-empty">
+            <div class="empty-inner">
+              <div class="empty-orbit" aria-hidden="true"></div>
+              <h3>Ready to screen</h3>
+              <p>Enter an opportunity or load the sample to see payout, safety, deadline, and human-gate signals.</p>
+            </div>
+          </div>
+
+          <div class="result-content" id="result-content" hidden>
+            <div class="verdict" id="verdict-card">
+              <div><span class="verdict-kicker">Decision</span><h3 id="decision">Review</h3></div>
+              <div class="verdict-badge" id="verdict-symbol" aria-hidden="true">?</div>
+            </div>
+            <div class="metrics">
+              <div class="metric"><span class="metric-label">Verified max single</span><span class="metric-value" id="payout">Not verified</span></div>
+              <div class="metric"><span class="metric-label">Deadline</span><span class="metric-value" id="deadline-status">Unknown</span></div>
+              <div class="metric"><span class="metric-label">Evidence</span><span class="metric-value" id="evidence">None</span></div>
+            </div>
+
+            <div class="section ranking-section" id="ranking-section" hidden>
+              <div class="section-title">Comparison ranking <span>deterministic order</span></div>
+              <div class="ranking-list" id="comparison-ranking"></div>
+            </div>
+
+            <div class="section checklist-section" id="checklist-section" hidden>
+              <div class="section-title">Verification checklist <span>input-only guidance</span></div>
+              <div class="checklist-grid">
+                <div class="checklist-card"><strong>Evidence gaps</strong><ul id="checklist-gaps"></ul></div>
+                <div class="checklist-card"><strong>Priority checks</strong><ul id="checklist-checks"></ul></div>
+                <div class="checklist-card"><strong>Safe next actions</strong><ul id="checklist-actions"></ul></div>
+                <div class="checklist-card stop"><strong>Stop conditions</strong><ul id="checklist-stops"></ul></div>
+              </div>
+            </div>
+
+            <div class="section audit-section" id="audit-section" hidden>
+              <div class="section-title">Payout audit <span>settlement evidence</span></div>
+              <div class="checklist-grid">
+                <div class="checklist-card"><strong>Individual payout</strong><p class="audit-value" id="audit-payout">Not verified</p></div>
+                <div class="checklist-card"><strong>Pool / currency</strong><p class="audit-value" id="audit-pool-currency">Unverified</p></div>
+                <div class="checklist-card"><strong>Payment timing</strong><ul id="audit-timing"></ul></div>
+                <div class="checklist-card"><strong>Payment conditions</strong><ul id="audit-conditions"></ul></div>
+                <div class="checklist-card stop"><strong>Settlement risks</strong><ul id="audit-risks"></ul></div>
+                <div class="checklist-card"><strong>Evidence gaps</strong><ul id="audit-gaps"></ul></div>
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="section-title">Reason codes <span>why this decision</span></div>
+              <div class="chips" id="reason-codes"></div>
+            </div>
+            <div class="section">
+              <div class="section-title">Human gates <span>required manual steps</span></div>
+              <div class="chips" id="human-gates"></div>
+            </div>
+            <div class="section">
+              <div class="section-title">Safety signals</div>
+              <div class="risk-grid">
+                <div class="risk-card"><strong>Credential & scam risk</strong><p id="severe-risks">No severe pattern detected.</p></div>
+                <div class="risk-card"><strong>Capital risk</strong><p id="capital-risks">No deposit or trading requirement detected.</p></div>
+              </div>
+            </div>
+            <div class="section">
+              <div class="section-title">Authorization safeguards</div>
+              <div class="chips" id="authorization"></div>
+            </div>
+            <details>
+              <summary>Raw deterministic response</summary>
+              <pre id="raw-json"></pre>
+            </details>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <span><strong>BountyGuard</strong> · Free analysis, comparison, checklists, and payout audits</span>
+      <span>Always verify the official source, sponsor, jurisdiction, and exact payout.</span>
+    </footer>
+  </div>
+
+  <script>
+    (() => {
+      const form = document.getElementById("screen-form");
+      const button = document.getElementById("analyze-button");
+      const sampleButton = document.getElementById("sample-button");
+      const copyButton = document.getElementById("copy-button");
+      const empty = document.getElementById("result-empty");
+      const content = document.getElementById("result-content");
+      const singleModeButton = document.getElementById("single-mode");
+      const compareModeButton = document.getElementById("compare-mode");
+      const checklistModeButton = document.getElementById("checklist-mode");
+      const auditModeButton = document.getElementById("audit-mode");
+      const singleView = document.getElementById("single-view");
+      const compareView = document.getElementById("compare-view");
+      const checklistView = document.getElementById("checklist-view");
+      const auditView = document.getElementById("audit-view");
+      const rankingSection = document.getElementById("ranking-section");
+      const rankingList = document.getElementById("comparison-ranking");
+      const checklistSection = document.getElementById("checklist-section");
+      const auditSection = document.getElementById("audit-section");
+      let lastResult = null;
+      let mode = "single";
+
+      const labels = {
+        preferred_currency_match: "Preferred currency match",
+        stable_value_payment_match: "Stable-value payment",
+        only_total_pool_verified: "Only total pool verified",
+        single_payout_not_verified: "Single payout unverified",
+        single_payout_below_target: "Below minimum target",
+        deadline_expired: "Deadline expired",
+        deadline_needs_verification: "Verify deadline",
+        severe_scam_or_credential_risk: "Severe scam / credential risk",
+        capital_or_trading_required: "Capital or trading required",
+        registration: "Registration",
+        identity_verification: "Identity verification",
+        wallet_for_payment: "Payment wallet",
+        email: "Email",
+        public_submission: "Public submission",
+        official_scope_mentioned: "Official scope",
+        local_or_test_environment: "Local / test environment",
+        production_testing_prohibited: "Production testing prohibited",
+        proof_required: "Reproducible proof",
+      };
+
+      const humanize = (value) => labels[value] || String(value).replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+      function chips(elementId, values, tone) {
+        const parent = document.getElementById(elementId);
+        parent.replaceChildren();
+        const list = values && values.length ? values : ["None detected"];
+        for (const value of list) {
+          const chip = document.createElement("span");
+          chip.className = `chip${tone ? ` ${tone}` : ""}`;
+          chip.textContent = humanize(value);
+          parent.appendChild(chip);
+        }
+      }
+
+      function checklistItems(elementId, values, emptyMessage) {
+        const parent = document.getElementById(elementId);
+        parent.replaceChildren();
+        const list = values && values.length ? values : [{ message: emptyMessage }];
+        for (const value of list) {
+          const entry = document.createElement("li");
+          entry.textContent = value.message;
+          parent.appendChild(entry);
+        }
+      }
+
+      function render(result) {
+        lastResult = result;
+        empty.hidden = true;
+        content.hidden = false;
+        copyButton.hidden = false;
+
+        const isComparison = Array.isArray(result.ranking);
+        const isChecklist = result.service === "BountyGuard Checklist";
+        const isAudit = result.service === "BountyGuard Payout Audit";
+        const primary = isComparison && result.ranking.length
+          ? result.ranking[0].analysis
+          : isChecklist
+            ? {
+                decision: result.decision,
+                payout: result.analysis_snapshot.payout,
+                deadline: result.analysis_snapshot.deadline,
+                evidence_quality: result.analysis_snapshot.evidence_quality,
+                reason_codes: result.analysis_snapshot.reason_codes,
+                human_gates: result.human_gates,
+                safety: result.analysis_snapshot.safety,
+              }
+            : isAudit
+              ? {
+                  decision: result.decision,
+                  payout: result.analysis_snapshot.payout,
+                  deadline: result.analysis_snapshot.deadline,
+                  evidence_quality: result.analysis_snapshot.evidence_quality,
+                  reason_codes: result.analysis_snapshot.reason_codes,
+                  human_gates: result.human_gates,
+                  safety: result.analysis_snapshot.safety,
+                }
+              : result;
+        const decision = primary.decision || "review";
+        const verdict = document.getElementById("verdict-card");
+        verdict.className = `verdict is-${decision}`;
+        document.getElementById("decision").textContent = decision;
+        document.getElementById("verdict-symbol").textContent = decision === "eligible" ? "✓" : decision === "reject" ? "×" : "?";
+
+        const verified = primary.payout && primary.payout.verified_max_single;
+        document.getElementById("payout").textContent = verified
+          ? `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(verified.amount)} ${verified.currency}`
+          : "Not verified";
+        document.getElementById("deadline-status").textContent = humanize(primary.deadline && primary.deadline.status || "unknown");
+        document.getElementById("evidence").textContent = humanize(primary.evidence_quality || "none");
+
+        chips("reason-codes", primary.reason_codes, decision === "eligible" ? "good" : decision === "reject" ? "bad" : "");
+        chips("human-gates", primary.human_gates);
+        chips("authorization", primary.safety && primary.safety.authorization_signals, "good");
+
+        const severe = primary.safety && primary.safety.severe_risks || [];
+        const capital = primary.safety && primary.safety.capital_risks || [];
+        document.getElementById("severe-risks").textContent = severe.length ? severe.map(humanize).join(" · ") : "No severe pattern detected.";
+        document.getElementById("capital-risks").textContent = capital.length ? capital.map(humanize).join(" · ") : "No deposit or trading requirement detected.";
+
+        rankingSection.hidden = !isComparison;
+        rankingList.replaceChildren();
+        if (isComparison) {
+          for (const item of result.ranking) {
+            const row = document.createElement("div");
+            row.className = "ranking-row";
+            const number = document.createElement("span");
+            number.className = "rank-number";
+            number.textContent = item.rank;
+            const copy = document.createElement("div");
+            copy.className = "rank-copy";
+            const title = document.createElement("strong");
+            title.textContent = item.title;
+            const status = document.createElement("span");
+            status.textContent = `${item.analysis.decision} · source ${item.source_index + 1}`;
+            copy.append(title, status);
+            const payout = document.createElement("span");
+            payout.className = "rank-payout";
+            const amount = item.analysis.payout && item.analysis.payout.verified_max_single;
+            payout.textContent = amount ? `${new Intl.NumberFormat("en-US").format(amount.amount)} ${amount.currency}` : "unverified";
+            row.append(number, copy, payout);
+            rankingList.appendChild(row);
+          }
+        }
+        checklistSection.hidden = !isChecklist;
+        if (isChecklist) {
+          checklistItems("checklist-gaps", result.evidence_gaps, "No additional evidence gap detected.");
+          checklistItems("checklist-checks", result.priority_checks, "No priority check generated.");
+          checklistItems("checklist-actions", result.safe_next_actions, "No safe next action generated.");
+          checklistItems("checklist-stops", result.stop_conditions, "No stop condition detected from the supplied input.");
+        }
+        auditSection.hidden = !isAudit;
+        if (isAudit) {
+          const auditPayout = result.payout_summary.verified_individual_payout;
+          document.getElementById("audit-payout").textContent = auditPayout
+            ? `${new Intl.NumberFormat("en-US").format(auditPayout.amount)} ${auditPayout.currency}`
+            : "Not verified";
+          const currencyState = result.payout_summary.currency_match === null
+            ? "currency unverified"
+            : result.payout_summary.currency_match ? "currency matched" : "currency mismatch";
+          document.getElementById("audit-pool-currency").textContent = `${result.payout_summary.pool_only ? "pool only" : "not pool-only"} · ${currencyState}`;
+          checklistItems("audit-timing", result.payout_summary.payment_timing.signals.map((item) => ({ message: `${humanize(item.code)}: ${item.evidence}` })), "Payment timing not stated.");
+          checklistItems("audit-conditions", result.payout_summary.payment_conditions, "Payment conditions not stated.");
+          checklistItems("audit-risks", result.settlement_risks, "No settlement risk detected from the supplied input.");
+          checklistItems("audit-gaps", result.evidence_gaps, "No additional evidence gap detected.");
+        }
+        document.getElementById("raw-json").textContent = JSON.stringify(result, null, 2);
+      }
+
+      function showError(message) {
+        lastResult = null;
+        copyButton.hidden = true;
+        content.hidden = true;
+        rankingSection.hidden = true;
+        checklistSection.hidden = true;
+        auditSection.hidden = true;
+        empty.hidden = false;
+        empty.innerHTML = "";
+        const box = document.createElement("div");
+        box.className = "error-box";
+        box.textContent = message;
+        empty.appendChild(box);
+      }
+
+      form.addEventListener("reset", () => {
+        window.setTimeout(() => {
+          lastResult = null;
+          copyButton.hidden = true;
+          content.hidden = true;
+          rankingSection.hidden = true;
+          checklistSection.hidden = true;
+          auditSection.hidden = true;
+          empty.hidden = false;
+          empty.innerHTML = '<div class="empty-inner"><div class="empty-orbit" aria-hidden="true"></div><h3>Ready to screen</h3><p>Enter an opportunity or load the sample to see payout, safety, deadline, and human-gate signals.</p></div>';
+        });
+      });
+
+      function setMode(nextMode) {
+        mode = nextMode;
+        const comparing = mode === "compare";
+        const checking = mode === "checklist";
+        const auditing = mode === "audit";
+        singleView.hidden = comparing || checking || auditing;
+        compareView.hidden = !comparing;
+        checklistView.hidden = !checking;
+        auditView.hidden = !auditing;
+        singleModeButton.setAttribute("aria-selected", String(!comparing && !checking && !auditing));
+        compareModeButton.setAttribute("aria-selected", String(comparing));
+        checklistModeButton.setAttribute("aria-selected", String(checking));
+        auditModeButton.setAttribute("aria-selected", String(auditing));
+        button.textContent = comparing ? "Compare opportunities" : checking ? "Build checklist" : auditing ? "Audit payout" : "Analyze opportunity";
+      }
+
+      singleModeButton.addEventListener("click", () => setMode("single"));
+      compareModeButton.addEventListener("click", () => setMode("compare"));
+      checklistModeButton.addEventListener("click", () => setMode("checklist"));
+      auditModeButton.addEventListener("click", () => setMode("audit"));
+
+      sampleButton.addEventListener("click", () => {
+        if (mode === "compare") {
+          document.getElementById("compare-json").value = JSON.stringify([
+            { title: "Clear individual prize", text: "First prize 10,000 USDT. Registration and KYC required.", deadline: "2026-07-27T23:59:59Z" },
+            { title: "Large pool only", text: "Total prize pool 100,000 USDT. Individual awards are not specified." },
+            { title: "Capital risk", text: "Win 20,000 USDT based on trading volume. Minimum deposit 500 USDT." },
+          ], null, 2);
+          document.getElementById("compare-json").focus();
+          return;
+        }
+        if (mode === "checklist") {
+          document.getElementById("checklist-json").value = JSON.stringify({
+            title: "Agent tooling award",
+            text: "First prize 10,000 USDT. Registration and KYC required. No deposit or trading is required.",
+            deadline: "2026-07-27T23:59:59Z",
+          }, null, 2);
+          document.getElementById("checklist-json").focus();
+          return;
+        }
+        if (mode === "audit") {
+          document.getElementById("audit-json").value = JSON.stringify({
+            title: "Agent tooling award",
+            text: "First prize 10,000 USDT. Payment within 30 days after winner announcement. KYC and a same-name account are required.",
+            deadline: "2026-07-27T23:59:59Z",
+          }, null, 2);
+          document.getElementById("audit-json").focus();
+          return;
+        }
+        document.getElementById("title").value = "Open-source agent tooling challenge";
+        document.getElementById("listing-text").value = "Total prize pool: 100,000 USDT. First prize: 10,000 USDT. Registration by email is required. Winners complete KYC and provide a compatible wallet address. No deposit or trading is required.";
+        document.getElementById("deadline").value = "2026-07-27T23:59";
+        document.getElementById("currency").value = "USDT";
+        document.getElementById("single-payout").value = "10000";
+        document.getElementById("listing-text").focus();
+      });
+
+      copyButton.addEventListener("click", async () => {
+        if (!lastResult) return;
+        try {
+          await navigator.clipboard.writeText(JSON.stringify(lastResult, null, 2));
+          copyButton.textContent = "Copied";
+          window.setTimeout(() => { copyButton.textContent = "Copy JSON"; }, 1300);
+        } catch {
+          copyButton.textContent = "Copy unavailable";
+        }
+      });
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        button.disabled = true;
+        button.textContent = mode === "compare" ? "Comparing…" : mode === "checklist" ? "Building…" : mode === "audit" ? "Auditing…" : "Analyzing…";
+
+        try {
+          const raw = Object.fromEntries(new FormData(form).entries());
+          let endpoint = "/v1/analyze";
+          let payload;
+
+          if (mode === "compare") {
+            let opportunities;
+            try {
+              opportunities = JSON.parse(raw.compare_json || "");
+            } catch {
+              throw new Error("Opportunities must be a valid JSON array.");
+            }
+            payload = {
+              opportunities,
+              targetUsd: Number(raw.compare_target),
+              preferredCurrencies: String(raw.compare_currencies || "")
+                .split(",")
+                .map((item) => item.trim())
+                .filter(Boolean),
+            };
+            endpoint = "/v1/compare";
+          } else if (mode === "checklist") {
+            let opportunity;
+            try {
+              opportunity = JSON.parse(raw.checklist_json || "");
+            } catch {
+              throw new Error("Opportunity must be a valid JSON object.");
+            }
+            payload = {
+              opportunity,
+              targetUsd: Number(raw.checklist_target),
+              preferredCurrencies: String(raw.checklist_currencies || "")
+                .split(",")
+                .map((item) => item.trim())
+                .filter(Boolean),
+            };
+            endpoint = "/v1/checklist";
+          } else if (mode === "audit") {
+            let opportunity;
+            try {
+              opportunity = JSON.parse(raw.audit_json || "");
+            } catch {
+              throw new Error("Opportunity must be a valid JSON object.");
+            }
+            payload = {
+              opportunity,
+              targetUsd: Number(raw.audit_target),
+              preferredCurrencies: String(raw.audit_currencies || "")
+                .split(",")
+                .map((item) => item.trim())
+                .filter(Boolean),
+            };
+            endpoint = "/v1/payout-audit";
+          } else {
+            if (!String(raw.text || "").trim()) throw new Error("Enter listing text before analyzing.");
+            payload = { text: raw.text, preferred_currency: "USDT" };
+            if (raw.title) payload.title = raw.title;
+            if (raw.currency) payload.currency = raw.currency;
+            if (raw.single_payout) payload.single_payout = Number(raw.single_payout);
+            if (raw.target_min_usd) payload.target_min_usd = Number(raw.target_min_usd);
+            if (raw.deadline) {
+              const parsed = new Date(raw.deadline);
+              if (!Number.isNaN(parsed.getTime())) payload.deadline = parsed.toISOString();
+            }
+          }
+
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || `Request failed (${response.status})`);
+          render(result);
+        } catch (error) {
+          showError(error.message || "Request failed. Please try again.");
+        } finally {
+          button.disabled = false;
+          button.textContent = mode === "compare" ? "Compare opportunities" : mode === "checklist" ? "Build checklist" : mode === "audit" ? "Audit payout" : "Analyze opportunity";
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
