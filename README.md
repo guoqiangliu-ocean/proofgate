@@ -187,13 +187,13 @@ npx wrangler deploy
 Never place the key in `wrangler.toml`, browser code, request JSON, screenshots,
 or version control.
 
-The Worker configures Cloudflare Rate Limiting bindings for eight requests per
-minute per client and 30 decision-memo calls per minute for the public demo
-within each Cloudflare location. The isolate-local limiter remains a fallback
-for local preview or missing bindings. Cloudflare documents these counters as
-eventually consistent and location-scoped, so a public deployment must still
-use a hard OpenAI project budget; add a WAF rule when stricter global control is
-needed.
+The Worker evaluates both an isolate-local eight-requests-per-minute client
+limit and Cloudflare Rate Limiting bindings for eight requests per minute per
+client plus 30 demo calls per minute within each Cloudflare location. The local
+limiter also keeps local preview and missing-binding deployments bounded.
+Cloudflare documents the platform counters as eventually consistent and
+location-scoped, so a public deployment must still use a hard OpenAI project
+budget; add a WAF rule when stricter global control is needed.
 
 ## Structure
 

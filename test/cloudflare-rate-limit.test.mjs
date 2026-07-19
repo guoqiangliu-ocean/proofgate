@@ -39,6 +39,7 @@ test("Cloudflare limiter enforces client and aggregate bindings with a local fal
   const allowed = await createCloudflareRateLimiter(env, fallback)(request());
   assert.equal(allowed.allowed, true);
   assert.equal(allowed.scope, "Cloudflare platform rate limits");
+  assert.equal(fallbackCalls, 2);
   assert.deepEqual(calls, [
     ["client", "203.0.113.7"],
     ["aggregate", "proofgate-public-demo"],
@@ -62,4 +63,17 @@ test("Cloudflare limiter enforces client and aggregate bindings with a local fal
     retryAfterSeconds: 60,
     scope: "Cloudflare aggregate demo rate limit",
   });
+
+  let platformCalls = 0;
+  const localBlock = createCloudflareRateLimiter({
+    DECISION_MEMO_CLIENT_LIMITER: { limit: async () => { platformCalls += 1; return { success: true }; } },
+    DECISION_MEMO_AGGREGATE_LIMITER: { limit: async () => { platformCalls += 1; return { success: true }; } },
+  }, () => ({
+    allowed: false,
+    limit: 8,
+    retryAfterSeconds: 11,
+    scope: "local fallback",
+  }));
+  assert.equal((await localBlock(request())).allowed, false);
+  assert.equal(platformCalls, 0);
 });
