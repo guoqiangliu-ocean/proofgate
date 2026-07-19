@@ -187,10 +187,13 @@ npx wrangler deploy
 Never place the key in `wrangler.toml`, browser code, request JSON, screenshots,
 or version control.
 
-The Worker includes a best-effort eight-requests-per-minute, per-IP limiter.
-Because isolate-local memory is not a complete abuse-control boundary, a public
-deployment must also use a Cloudflare Rate Limiting/WAF rule (or equivalent)
-and a hard OpenAI project budget. Do not rely on the in-code limiter alone.
+The Worker configures Cloudflare Rate Limiting bindings for eight requests per
+minute per client and 30 decision-memo calls per minute for the public demo
+within each Cloudflare location. The isolate-local limiter remains a fallback
+for local preview or missing bindings. Cloudflare documents these counters as
+eventually consistent and location-scoped, so a public deployment must still
+use a hard OpenAI project budget; add a WAF rule when stricter global control is
+needed.
 
 ## Structure
 
@@ -199,6 +202,7 @@ and a hard OpenAI project budget. Do not rely on the in-code limiter alone.
 - `lib/checklist.mjs` — strict input validation and deterministic next-step checklist.
 - `lib/payout-audit.mjs` — deterministic payout, timing, condition, and settlement audit.
 - `lib/decision-memo.mjs` — GPT-5.6 request, structured-output validation, and evidence locking.
+- `lib/cloudflare-rate-limit.mjs` — Cloudflare platform limiter adapter and local fallback routing.
 - `lib/rate-limit.mjs` — best-effort per-isolate request limiter.
 - `lib/http-handler.mjs` — shared Fetch API request handler.
 - `public/index.html` — single-file demo UI.
@@ -241,7 +245,7 @@ with evidence pointers. The server renders those references, and the local
 checklist owns all gaps, actions, and stop conditions. GPT-5.6 is not used as an
 unreviewable classifier and cannot override a rejection.
 
-The automated suite currently contains 76 tests. It covers deterministic
+The automated suite currently contains 77 tests. It covers deterministic
 analysis, comparison, checklists, payout audits, server behavior, request-size
 limits, missing-key handling, upstream errors, malicious or invalid structured
 output, unsafe model instructions, evidence-claim rendering, decision

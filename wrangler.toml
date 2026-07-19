@@ -2,6 +2,22 @@ name = "proofgate-build-week"
 main = "worker.mjs"
 compatibility_date = "2026-07-17"
 
+[[ratelimits]]
+name = "DECISION_MEMO_CLIENT_LIMITER"
+namespace_id = "2026071901"
+
+  [ratelimits.simple]
+  limit = 8
+  period = 60
+
+[[ratelimits]]
+name = "DECISION_MEMO_AGGREGATE_LIMITER"
+namespace_id = "2026071902"
+
+  [ratelimits.simple]
+  limit = 30
+  period = 60
+
 [[rules]]
 type = "Text"
 globs = ["**/*.html"]

@@ -553,7 +553,7 @@ test("decision memo applies a pre-model rate-limit gate", async () => {
       called = true;
       throw new Error("must not run");
     },
-    rateLimiter: () => ({
+    rateLimiter: async () => ({
       allowed: false,
       limit: 8,
       retryAfterSeconds: 17,
