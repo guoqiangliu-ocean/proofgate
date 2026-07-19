@@ -252,7 +252,7 @@ with evidence pointers. The server renders those references, and the local
 checklist owns all gaps, actions, and stop conditions. GPT-5.6 is not used as an
 unreviewable classifier and cannot override a rejection.
 
-The automated suite currently contains 77 tests. It covers deterministic
+The automated suite currently contains 89 tests. It covers deterministic
 analysis, comparison, checklists, payout audits, server behavior, request-size
 limits, missing-key handling, upstream errors, malicious or invalid structured
 output, unsafe model instructions, evidence-claim rendering, decision

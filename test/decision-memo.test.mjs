@@ -134,6 +134,24 @@ test("decision memo returns 503 without a server key and rejects body key fields
   assert.doesNotMatch(JSON.stringify(body), /attacker-(?:body|env)-key/);
 });
 
+test("safe example remains eligible when a later evidence field mentions first prize", async () => {
+  const response = await handleRequest(endpointRequest({
+    title: "Open-source agent workflow bounty",
+    reward: "USD 8,000 for the winning individual or team",
+    deadline: "2026-07-24T17:00:00+09:00",
+    payment_terms: "Bank transfer within 30 days of winner confirmation. No entry fee, deposit, purchase, or trading requirement is stated.",
+    evidence: "Official rules name an individual first prize of USD 8,000 and specify the deadline.",
+    obligations: "Submit a prototype and public repository.",
+    risk_signals: "International tax documentation is unclear.",
+  }), { now: fixedNow });
+
+  assert.equal(response.status, 503);
+  const body = await response.json();
+  assert.equal(body.decision, "eligible");
+  assert.deepEqual(body.deterministic.safety.severe_risks, []);
+  assert.deepEqual(body.deterministic.safety.capital_risks, []);
+});
+
 test("decision memo converts an upstream error to a non-leaking 502", async () => {
   const upstreamSecret = "sk-upstream-secret-value";
   const response = await handleRequest(endpointRequest(), {
