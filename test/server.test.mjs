@@ -49,6 +49,8 @@ test("schema remains available as JSON", async () => {
   assert.equal(body.services.compare.endpoint, "POST /v1/compare");
   assert.equal(body.services.checklist.endpoint, "POST /v1/checklist");
   assert.equal(body.services.payout_audit.endpoint, "POST /v1/payout-audit");
+  assert.equal(body.services.decision_memo.endpoint, "POST /v1/decision-memo");
+  assert.equal(body.services.decision_memo.model, "gpt-5.6");
   assert.equal(body.safety.maximum_request_bytes, 65_536);
 });
 

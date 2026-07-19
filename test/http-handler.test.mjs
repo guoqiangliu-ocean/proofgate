@@ -44,5 +44,6 @@ test("shared Worker handler returns a constrained 404", async () => {
     "POST /v1/compare",
     "POST /v1/checklist",
     "POST /v1/payout-audit",
+    "POST /v1/decision-memo",
   ]);
 });

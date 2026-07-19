@@ -1,17 +1,54 @@
-# BountyGuard ASP
+# ProofGate
 
-BountyGuard is a deterministic, read-only API for screening and comparing jobs,
-grants, hackathons, and bounties. It separates an individual payout from a
-headline pool, checks deadlines, identifies unavoidable human gates, and
-rejects common capital-risk or credential-risk patterns.
+ProofGate turns messy job, grant, hackathon, and bounty listings into an
+evidence-led decision memo. A deterministic safety engine first separates
+individual payouts from headline pools, checks deadlines, identifies normal
+human gates, and rejects capital or credential risks. GPT-5.6 then turns that
+locked analysis into a concise memo with evidence gaps, safe next actions, and
+stop conditions. The model can explain the decision; it cannot override it.
 
-It is designed as a free OKX.AI A2MCP endpoint. It never asks for a wallet,
-private key, password, or payment, and it does not fetch arbitrary URLs.
+ProofGate is a Work & Productivity project for OpenAI Build Week. It extends
+the original deterministic BountyGuard engine with a new single-workflow UI,
+the `POST /v1/decision-memo` endpoint, server-side Responses API integration,
+strict structured output, evidence pointers, and adversarial model-boundary
+tests.
+
+The service never asks for a wallet, private key, password, deposit, or payment.
+It does not fetch arbitrary URLs, move funds, trade, or guarantee that an
+opportunity is legitimate.
+
+## Architecture
+
+```text
+structured opportunity
+        |
+        v
+deterministic BountyGuard engine ----> locked GO / VERIFY / STOP decision
+        |                                      |
+        +---- facts, reasons, limitations -----+
+                                               v
+                                 GPT-5.6 Responses API
+                                               |
+                                               v
+                              evidence-constrained decision memo
+```
+
+Only the server reads `OPENAI_API_KEY`. The browser never receives it.
 
 ## Run
 
+`npm test` uses mocked model responses and never needs a network connection or
+API key.
+
 ```bash
 npm test
+```
+
+To use the GPT-5.6 decision memo locally, set the key only in the server
+environment and start the app:
+
+```powershell
+$env:OPENAI_API_KEY = "your_key_here"
 npm start
 ```
 
@@ -19,7 +56,28 @@ The server listens on `127.0.0.1:8787` by default. Open that address in a
 browser for the responsive demo UI. The interface is one self-contained HTML
 file with inline CSS and JavaScript; it loads no third-party assets.
 
+Without `OPENAI_API_KEY`, the deterministic endpoints still work. The decision
+memo endpoint fails safely with HTTP 503 and returns the deterministic analysis
+instead of fabricating a model result.
+
 ## API
+
+Create an evidence-constrained GPT-5.6 memo:
+
+```bash
+curl -i -X POST http://127.0.0.1:8787/v1/decision-memo \
+  -H "content-type: application/json" \
+  -d '{"title":"Verified research award","reward":{"amount":10000,"currency":"USD"},"deadline":"2026-12-31T23:59:59Z","payment_terms":"First prize paid after winner verification.","evidence":"Official rules state an individual first prize.","obligations":"Registration and KYC if selected.","risk_signals":"None stated."}'
+```
+
+The server runs deterministic analysis first, sends only the normalized
+opportunity plus that analysis to `gpt-5.6`, and requires strict JSON output.
+The returned `decision` always comes from the deterministic engine.
+Model-supplied evidence pointers must resolve to submitted or deterministic
+data. Missing server configuration returns 503; upstream or invalid model
+output returns 502.
+
+The original deterministic API remains available:
 
 ```bash
 curl -i -X POST http://127.0.0.1:8787/v1/analyze \
@@ -87,6 +145,7 @@ not authenticate the listing, payer, payment account, or settlement guarantee.
 Routes:
 
 - `GET /` — interactive demo UI.
+- `POST /v1/decision-memo` — deterministic decision plus GPT-5.6 memo.
 - `POST /` — A2MCP-compatible JSON analysis.
 - `POST /v1/analyze` — canonical JSON analysis endpoint.
 - `POST /v1/compare` — deterministic 2–10 opportunity ranking.
@@ -98,10 +157,10 @@ Routes:
 
 ## Cloudflare Worker
 
-`worker.mjs` uses the same `handleRequest` function and deterministic analysis
-logic as the local Node server. `wrangler.toml` imports the self-contained HTML
-demo as a text module. There are no bindings, secrets, wallet operations, or
-external network calls.
+`worker.mjs` uses the same `handleRequest` function and analysis logic as the
+local Node server. `wrangler.toml` imports the self-contained HTML demo as a
+text module. GPT-5.6 is called only from the Worker through the official
+Responses API.
 
 Local Worker preview:
 
@@ -115,14 +174,16 @@ Inspect the exact bundle without deploying:
 npx wrangler deploy --dry-run --outdir dist
 ```
 
-Deploy only after reviewing the dry run and authenticating the intended
-Cloudflare account:
+Configure the server-side secret, review the dry run, and deploy from the
+intended Cloudflare account:
 
 ```bash
+npx wrangler secret put OPENAI_API_KEY
 npx wrangler deploy
 ```
 
-No Cloudflare login or deployment is performed by this project setup.
+Never place the key in `wrangler.toml`, browser code, request JSON, screenshots,
+or version control.
 
 ## Structure
 
@@ -130,17 +191,64 @@ No Cloudflare login or deployment is performed by this project setup.
 - `lib/compare.mjs` — validation and deterministic multi-opportunity ranking.
 - `lib/checklist.mjs` — strict input validation and deterministic next-step checklist.
 - `lib/payout-audit.mjs` — deterministic payout, timing, condition, and settlement audit.
+- `lib/decision-memo.mjs` — GPT-5.6 request, structured-output validation, and evidence locking.
 - `lib/http-handler.mjs` — shared Fetch API request handler.
 - `public/index.html` — single-file demo UI.
 - `server.mjs` — local Node adapter.
 - `worker.mjs` — Cloudflare Worker entrypoint.
 - `wrangler.toml` — minimal Worker configuration.
 
+## Build Week development
+
+ProofGate was developed during the 13–21 July 2026 submission window. The
+starting point was the deterministic-only BountyGuard screening engine; an
+earlier variant of that engine was also submitted to the OKX.AI track.
+The OpenAI Build Week extension adds the ProofGate product workflow, the
+GPT-5.6 decision-memo route, strict structured output, model-boundary
+validation, Worker secret injection, and new adversarial tests.
+
+| Earlier BountyGuard base | Build Week ProofGate extension |
+|---|---|
+| Four deterministic JSON workflows | One guided decision-memo workspace |
+| Rule-engine output only | GPT-5.6 evidence-constrained memo |
+| No OpenAI API call | Server-side Responses API integration |
+| Deterministic endpoint tests | Model-boundary, injection, and secret-leak tests |
+| Original BountyGuard presentation | New ProofGate product and demo flow |
+
+Codex was the primary implementation workspace. It helped decompose the product
+into shared modules, extend the Node and Worker adapters, generate edge cases,
+and run the complete test suite after each integration. The human-directed
+product decisions were to:
+
+- keep the final decision deterministic and inspectable;
+- separate headline prize pools from individual payouts;
+- distinguish normal registration or KYC gates from stop conditions;
+- make evidence gaps and limitations visible; and
+- fail closed if the server key, upstream response, or evidence mapping is
+  invalid.
+
+GPT-5.6 is used at runtime for the part that benefits from language reasoning:
+turning the locked analysis and submitted evidence into a concise decision memo.
+It is not used as an unreviewable classifier and cannot override a rejection.
+
+The automated suite currently contains 67 tests. It covers deterministic
+analysis, comparison, checklists, payout audits, server behavior, request-size
+limits, missing-key handling, upstream errors, malicious or invalid structured
+output, decision consistency, and API-key non-disclosure. All model tests use
+mocked fetch responses; a separate live smoke test requires a real server-side
+API key.
+
 ## Safety boundary
 
 - No external page fetching or arbitrary URL access.
+- The only runtime egress is the server-side OpenAI Responses API call for the
+  decision memo.
 - No trading, deposits, referrals, or wallet operations.
-- No credentials, private keys, analytics, cookies, or persistent storage.
+- No user credentials, private keys, analytics, cookies, or persistent storage.
+- The OpenAI API key stays in the server environment and is never accepted from
+  the request body or returned to the client.
+- GPT-5.6 cannot change the deterministic decision; invalid, inconsistent, or
+  secret-bearing model output fails closed.
 - No guarantee that a listing is genuine or that a user will be selected.
 - Official source, sponsor identity, payout, deadline, jurisdiction, and tax
   treatment still require human verification.

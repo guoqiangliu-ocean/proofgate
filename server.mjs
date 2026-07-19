@@ -17,7 +17,10 @@ export const server = http.createServer(async (request, response) => {
     }
     const origin = `http://${request.headers.host || "localhost"}`;
     const webRequest = new Request(new URL(request.url || "/", origin), init);
-    const webResponse = await handleRequest(webRequest, { uiHtml });
+    const webResponse = await handleRequest(webRequest, {
+      uiHtml,
+      openAiApiKey: process.env.OPENAI_API_KEY,
+    });
     const payload = Buffer.from(await webResponse.arrayBuffer());
     const headers = Object.fromEntries(webResponse.headers);
     headers["content-length"] = String(payload.byteLength);

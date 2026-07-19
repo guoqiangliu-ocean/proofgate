@@ -1,9 +1,9 @@
 {
-  "name": "bountyguard-asp",
-  "version": "1.0.0",
+  "name": "proofgate",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
-  "description": "Deterministic opportunity screening API for agents",
+  "description": "Evidence-led opportunity decisions with deterministic safety gates and GPT-5.6 memos",
   "scripts": {
     "start": "node server.mjs",
     "test": "node --test test/*.test.mjs"
