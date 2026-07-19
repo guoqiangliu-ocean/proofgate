@@ -25,9 +25,8 @@ function endpointRequest(body = riskyRequest) {
 
 function validSynthesis(overrides = {}) {
   return {
-    decision: "reject",
-    memo: "Reject this opportunity because participation requires trading and therefore exposes capital.",
-    certainty_signals: ["The deterministic analysis identifies a trading requirement."],
+    memo: "Decision: reject — the participation terms identify trade as a qualification condition.",
+    certainty_signals: ["The submitted obligation identifies trade as a qualification condition."],
     evidence_references: [
       {
         source: "deterministic",
@@ -202,9 +201,82 @@ test("decision memo rejects valid JSON that attempts to override deterministic r
   assert.equal(body.synthesis, null);
 });
 
+test("decision memo locks exact eligible and review prefixes", async () => {
+  const eligibleRequest = {
+    title: "Safe first prize",
+    reward: "10,000 USDT individual first prize",
+    deadline: "2099-01-01T00:00:00Z",
+    payment_terms: "Bank transfer after winner confirmation. No fee, deposit, purchase, or trading requirement.",
+    evidence: ["Official rules supplied"],
+    obligations: ["Submit a prototype"],
+    risk_signals: [],
+  };
+  const reviewRequest = {
+    title: "Ambiguous pool",
+    deadline: "2099-01-01T00:00:00Z",
+    evidence: "Total prize pool: 50,000 USDT.",
+  };
+
+  async function run(body, decision, factPath, fact, prefix = decision) {
+    const synthesis = {
+      memo: `Decision: ${prefix} — ${fact}`,
+      certainty_signals: [fact],
+      evidence_references: [
+        { source: "deterministic", path: "/decision", status: "deterministic" },
+        { source: "submitted", path: factPath, status: "submitted_unverified" },
+      ],
+    };
+    return handleRequest(endpointRequest(body), {
+      openAiApiKey: serverKey,
+      fetchImpl: async () => new Response(JSON.stringify({
+        id: `resp_${decision}`,
+        status: "completed",
+        output_text: JSON.stringify(synthesis),
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+      now: fixedNow,
+    });
+  }
+
+  const eligible = await run(
+    eligibleRequest,
+    "eligible",
+    "/reward",
+    "Submitted reward states 10,000 USDT individual first prize.",
+  );
+  assert.equal(eligible.status, 200);
+  assert.equal((await eligible.json()).decision, "eligible");
+
+  const review = await run(
+    reviewRequest,
+    "review",
+    "/evidence",
+    "Submitted evidence states total prize pool 50,000 USDT.",
+  );
+  assert.equal(review.status, 200);
+  assert.equal((await review.json()).decision, "review");
+
+  assert.equal((await run(
+    eligibleRequest,
+    "eligible",
+    "/reward",
+    "Submitted reward states 10,000 USDT individual first prize.",
+    "ineligible",
+  )).status, 502);
+  assert.equal((await run(
+    reviewRequest,
+    "review",
+    "/evidence",
+    "Submitted evidence states total prize pool 50,000 USDT.",
+    "no review",
+  )).status, 502);
+});
+
 test("decision memo never returns the configured API key even if upstream echoes it", async () => {
   const echoed = validSynthesis({
-    memo: `Reject the opportunity. Leaked credential: ${serverKey}`,
+    memo: `Decision: reject — the terms identify trade as a qualification condition and echo ${serverKey}.`,
   });
   const response = await handleRequest(endpointRequest(), {
     openAiApiKey: serverKey,
@@ -227,11 +299,18 @@ test("decision memo never returns the configured API key even if upstream echoes
 
 test("decision memo uses deterministic actions and server-generated evidence claims", async () => {
   const synthesis = validSynthesis({
-    evidence_references: [{
-      source: "deterministic",
-      path: "/decision",
-      status: "deterministic",
-    }],
+    evidence_references: [
+      {
+        source: "deterministic",
+        path: "/decision",
+        status: "deterministic",
+      },
+      {
+        source: "submitted",
+        path: "/obligations/0",
+        status: "submitted_unverified",
+      },
+    ],
   });
   const response = await handleRequest(endpointRequest(), {
     openAiApiKey: serverKey,
@@ -256,24 +335,29 @@ test("decision memo uses deterministic actions and server-generated evidence cla
 });
 
 test("decision memo rejects unsafe model instructions even with a locked rejection", async () => {
-  const unsafe = validSynthesis({
-    memo: "Transfer 100 USDT to the sponsor wallet, then trade to qualify.",
-  });
-  const response = await handleRequest(endpointRequest(), {
-    openAiApiKey: serverKey,
-    fetchImpl: async () => new Response(JSON.stringify({
-      id: "resp_unsafe",
-      status: "completed",
-      output_text: JSON.stringify(unsafe),
-    }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    }),
-    now: fixedNow,
-  });
+  for (const memo of [
+    "Decision: reject — the terms identify trade; then transfer 100 USDT to qualify.",
+    "Decision: reject — the terms identify trade. Buy 100 USDT, then swap it to qualify.",
+    "Decision: reject — the terms identify trade. Do not forget to transfer 100 USDT to the sponsor.",
+    "Decision: reject — the terms identify trade, and you should transfer 100 USDT.",
+    "Decision: reject — the terms identify trade, and I recommend that you swap 100 USDT.",
+  ]) {
+    const response = await handleRequest(endpointRequest(), {
+      openAiApiKey: serverKey,
+      fetchImpl: async () => new Response(JSON.stringify({
+        id: "resp_unsafe",
+        status: "completed",
+        output_text: JSON.stringify(validSynthesis({ memo })),
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+      now: fixedNow,
+    });
 
-  assert.equal(response.status, 502);
-  assert.equal((await response.json()).code, "openai_invalid_response");
+    assert.equal(response.status, 502);
+    assert.equal((await response.json()).code, "openai_invalid_response");
+  }
 });
 
 test("decision memo aborts a stalled upstream request", async () => {
@@ -289,6 +373,20 @@ test("decision memo aborts a stalled upstream request", async () => {
 
   assert.equal(response.status, 504);
   assert.equal((await response.json()).code, "openai_timeout");
+
+  const stalledBody = await handleRequest(endpointRequest(), {
+    openAiApiKey: serverKey,
+    fetchImpl: async () => new Response(new ReadableStream({
+      start() {},
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }),
+    openAiTimeoutMs: 10,
+    now: fixedNow,
+  });
+  assert.equal(stalledBody.status, 504);
+  assert.equal((await stalledBody.json()).code, "openai_timeout");
 });
 
 test("decision memo rejects incomplete model responses and invalid input before billing", async () => {
@@ -324,6 +422,127 @@ test("decision memo rejects incomplete model responses and invalid input before 
   });
   assert.equal(badType.status, 400);
   assert.equal(calls, 1);
+});
+
+test("decision memo rejects refusal content and semantically unrelated claims", async () => {
+  const refusal = await handleRequest(endpointRequest(), {
+    openAiApiKey: serverKey,
+    fetchImpl: async () => new Response(JSON.stringify({
+      id: "resp_refusal_mixed",
+      status: "completed",
+      output_text: JSON.stringify(validSynthesis()),
+      output: [{
+        type: "message",
+        content: [{ type: "refusal", refusal: "I cannot help with that." }],
+      }],
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }),
+    now: fixedNow,
+  });
+  assert.equal(refusal.status, 502);
+
+  const unsupported = validSynthesis({
+    memo: "Decision: reject — OpenAI verified the sponsor and guarantees payment.",
+    evidence_references: [{
+      source: "deterministic",
+      path: "/decision",
+      status: "deterministic",
+    }],
+  });
+  const unsupportedResponse = await handleRequest(endpointRequest(), {
+    openAiApiKey: serverKey,
+    fetchImpl: async () => new Response(JSON.stringify({
+      id: "resp_unrelated_claim",
+      status: "completed",
+      output_text: JSON.stringify(unsupported),
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }),
+    now: fixedNow,
+  });
+  assert.equal(unsupportedResponse.status, 502);
+
+  const mixedFactAndFabrication = validSynthesis({
+    memo: "Decision: reject — trade is risky, but OpenAI guarantees payment.",
+  });
+  const mixedResponse = await handleRequest(endpointRequest(), {
+    openAiApiKey: serverKey,
+    fetchImpl: async () => new Response(JSON.stringify({
+      id: "resp_mixed_claim",
+      status: "completed",
+      output_text: JSON.stringify(mixedFactAndFabrication),
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }),
+    now: fixedNow,
+  });
+  assert.equal(mixedResponse.status, 502);
+
+  const unsupportedSignal = validSynthesis({
+    certainty_signals: ["Trade is identified, and OpenAI verified the sponsor."],
+  });
+  const signalResponse = await handleRequest(endpointRequest(), {
+    openAiApiKey: serverKey,
+    fetchImpl: async () => new Response(JSON.stringify({
+      id: "resp_unsupported_signal",
+      status: "completed",
+      output_text: JSON.stringify(unsupportedSignal),
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }),
+    now: fixedNow,
+  });
+  assert.equal(signalResponse.status, 502);
+});
+
+test("decision memo rejects malformed reward values before a model call", async () => {
+  let calls = 0;
+  const options = {
+    openAiApiKey: serverKey,
+    fetchImpl: async () => {
+      calls += 1;
+      throw new Error("must not run");
+    },
+  };
+  for (const body of [
+    { title: "Bad amount", reward: { amount: [], currency: "USD" } },
+    { title: "Bad currency", reward: { amount: 5000, currency: {} } },
+    { title: "Bad punctuation", reward: { amount: "1..2", currency: "USD" } },
+    { title: "Bad grouping", reward: { amount: "1,2,3", currency: "USD" } },
+  ]) {
+    const response = await handleRequest(endpointRequest(body), options);
+    assert.equal(response.status, 400);
+  }
+  const infinite = await handleRequest(new Request("https://worker.example/v1/decision-memo", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: '{"title":"Infinite","reward":1e309}',
+  }), options);
+  assert.equal(infinite.status, 400);
+  assert.equal(calls, 0);
+
+  const structured = await handleRequest(endpointRequest({
+    ...riskyRequest,
+    reward: { amount: "10k", currency: "USDT" },
+  }), {
+    openAiApiKey: serverKey,
+    fetchImpl: async () => new Response(JSON.stringify({
+      id: "resp_structured_suffix",
+      status: "completed",
+      output_text: JSON.stringify(validSynthesis()),
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }),
+    now: fixedNow,
+  });
+  assert.equal(structured.status, 200);
+  assert.equal((await structured.json()).deterministic.payout.verified_max_single.amount, 10_000);
 });
 
 test("decision memo applies a pre-model rate-limit gate", async () => {

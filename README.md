@@ -31,7 +31,7 @@ deterministic BountyGuard engine ----> locked GO / VERIFY / STOP decision
                                  GPT-5.6 Responses API
                                                |
                                                v
-                              evidence-constrained decision memo
+                               pointer-backed decision memo
 ```
 
 Only the server reads `OPENAI_API_KEY`. The browser never receives it.
@@ -63,7 +63,7 @@ instead of fabricating a model result.
 
 ## API
 
-Create an evidence-constrained GPT-5.6 memo:
+Create an evidence-linked GPT-5.6 memo:
 
 ```bash
 curl -i -X POST http://127.0.0.1:8787/v1/decision-memo \
@@ -161,8 +161,8 @@ Routes:
 
 `worker.mjs` uses the same `handleRequest` function and analysis logic as the
 local Node server. `wrangler.toml` imports the self-contained HTML demo as a
-text module. GPT-5.6 is called only from the Worker through the official
-Responses API.
+text module. Both adapters call GPT-5.6 only from the server side through the
+official Responses API.
 
 Local Worker preview:
 
@@ -218,7 +218,7 @@ validation, Worker secret injection, and new adversarial tests.
 | Earlier BountyGuard base | Build Week ProofGate extension |
 |---|---|
 | Four deterministic JSON workflows | One guided decision-memo workspace |
-| Rule-engine output only | GPT-5.6 evidence-constrained memo |
+| Rule-engine output only | GPT-5.6 pointer-backed memo |
 | No OpenAI API call | Server-side Responses API integration |
 | Deterministic endpoint tests | Model-boundary, injection, and secret-leak tests |
 | Original BountyGuard presentation | New ProofGate product and demo flow |
@@ -241,7 +241,7 @@ with evidence pointers. The server renders those references, and the local
 checklist owns all gaps, actions, and stop conditions. GPT-5.6 is not used as an
 unreviewable classifier and cannot override a rejection.
 
-The automated suite currently contains 73 tests. It covers deterministic
+The automated suite currently contains 76 tests. It covers deterministic
 analysis, comparison, checklists, payout audits, server behavior, request-size
 limits, missing-key handling, upstream errors, malicious or invalid structured
 output, unsafe model instructions, evidence-claim rendering, decision
