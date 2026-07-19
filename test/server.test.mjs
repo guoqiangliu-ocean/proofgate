@@ -34,6 +34,9 @@ test("GET root serves the responsive demo UI", async () => {
   assert.match(html, /id="success-state"/);
   assert.match(html, /id="copy-memo"/);
   assert.match(html, /"\/v1\/decision-memo"/);
+  assert.match(html, /deadline: "2026-12-31T23:59:59Z"/);
+  assert.match(html, /refundable 500 USDT deposit before registration/);
+  assert.doesNotMatch(html, /Applications close next Friday/);
   assert.doesNotMatch(html, /https?:\/\//);
 });
 
