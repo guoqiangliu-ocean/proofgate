@@ -29,15 +29,11 @@ test("GET root serves the responsive demo UI", async () => {
   assert.equal(response.headers.get("content-type"), "text/html; charset=utf-8");
   assert.equal(response.headers.get("x-frame-options"), "DENY");
   const html = await response.text();
-  assert.match(html, /<title>BountyGuard/);
-  assert.match(html, /id="screen-form"/);
-  assert.match(html, /id="compare-mode"/);
-  assert.match(html, /id="checklist-mode"/);
-  assert.match(html, /id="audit-mode"/);
-  assert.match(html, /"\/v1\/analyze"/);
-  assert.match(html, /"\/v1\/compare"/);
-  assert.match(html, /"\/v1\/checklist"/);
-  assert.match(html, /"\/v1\/payout-audit"/);
+  assert.match(html, /<title>ProofGate/);
+  assert.match(html, /id="decision-form"/);
+  assert.match(html, /id="success-state"/);
+  assert.match(html, /id="copy-memo"/);
+  assert.match(html, /"\/v1\/decision-memo"/);
   assert.doesNotMatch(html, /https?:\/\//);
 });
 
