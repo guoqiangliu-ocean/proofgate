@@ -14,6 +14,13 @@ the `POST /v1/decision-memo` endpoint, server-side Responses API integration,
 strict structured output, evidence pointers, and adversarial model-boundary
 tests.
 
+**Public demo:** <https://proofgate-build-week.oddpulse-txline-2026.workers.dev>
+
+The public instance is currently deployed in transparent rules-only safe mode
+until a restricted OpenAI project key and hard project budget are configured.
+It returns the complete deterministic result without pretending that a GPT-5.6
+memo was generated.
+
 The service never asks for a wallet, private key, password, deposit, or payment.
 It does not fetch arbitrary URLs, move funds, trade, or guarantee that an
 opportunity is legitimate.
